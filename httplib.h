@@ -4902,6 +4902,28 @@ inline bool ClientImpl::write_request(Stream &strm, const Request &req,
     return false;
   }
 
+  // Check for 100-continue
+  if(req.get_header_value("Expect") == "100-continue") {
+    Response res;
+    if(!read_response_line(strm, res)){
+      error_ = Error::Read;
+      return false;
+    } else {
+      std::array<char, 8> buf;
+      detail::stream_line_reader line_reader(strm, buf.data(), buf.size());
+      switch (res.status) {
+        case 100:
+          // pop trailing newline from response
+          line_reader.getline();
+          break;
+        case 417: // HTTP 417 Expectation Failed
+          return false;
+        default:
+          break;
+      }
+    }
+  }
+
   // Body
   if (req.body.empty()) {
     if (req.content_provider) {
